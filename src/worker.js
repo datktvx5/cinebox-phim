@@ -336,7 +336,6 @@ export default {
         if (!env.DB) return fail('Chưa liên kết cơ sở dữ liệu Cloudflare D1.', 503);
         return await api(request, env);
       }
-      if (url.pathname === '/admin') return Response.redirect(url.origin + '/admin.html', 302);
       return env.ASSETS.fetch(request);
     } catch (e) {
       console.error('CineBox worker:', e);
