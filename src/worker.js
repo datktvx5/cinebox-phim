@@ -3,6 +3,7 @@ const SESSION_COOKIE = 'cinebox_session';
 const SESSION_SECONDS = 12 * 60 * 60;
 const CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_MOVIE_BYTES = 25 * 1024 * 1024 * 1024;
+const MAX_POSTER_BYTES = 5 * 1024 * 1024;
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
 const out = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
@@ -103,6 +104,14 @@ async function driveJson(url, { method = 'GET', token, json, headers = {} }) {
   if (!res.ok) throw new Error('Google Drive: ' + (obj.error?.message || res.status));
   return obj;
 }
+function validPosterBytes(bytes, mime) {
+  const x = new Uint8Array(bytes);
+  if (mime === 'image/jpeg') return x.length >= 3 && x[0] === 255 && x[1] === 216 && x[2] === 255;
+  if (mime === 'image/png') return x.length >= 8 && [137,80,78,71,13,10,26,10].every((n,i) => x[i] === n);
+  if (mime === 'image/webp') return x.length >= 12 && [82,73,70,70].every((n,i) => x[i] === n) && [87,69,66,80].every((n,i) => x[i+8] === n);
+  return false;
+}
+
 async function makePublic(fileId, env) {
   try {
     const { token } = await googleToken(env);
@@ -164,6 +173,30 @@ async function api(request, env) {
     if (!movie) return fail('Không tìm thấy phim.', 404);
     const eps = await env.DB.prepare('SELECT id,title,episode_number,drive_file_id,public_ok FROM episodes WHERE movie_id=? ORDER BY episode_number').bind(movie.id).all();
     return out({ movie, episodes: eps.results });
+  }
+  // Portrait posters stored on Drive are fetched through our Worker, not public Drive hotlinks.
+  const posterPath = pathname.match(/^\/api\/posters\/([a-zA-Z0-9_-]{10,100})$/);
+  if (posterPath && method === 'GET') {
+    const fileId = posterPath[1];
+    const publicPoster = await env.DB.prepare('SELECT id FROM movies WHERE published=1 AND poster_url LIKE ? LIMIT 1')
+      .bind(`%/api/posters/${fileId}`).first();
+    if (!publicPoster && !(await isAdmin(request, env))) return fail('Khong tim thay anh poster.', 404);
+    const cache = typeof caches !== 'undefined' ? caches.default : null;
+    const cached = cache ? await cache.match(request) : null;
+    if (cached) return cached;
+    const { token } = await googleToken(env);
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return fail('Google Drive chua tra ve anh poster.', 502);
+    const mime = (res.headers.get('content-type') || '').split(';')[0].toLowerCase();
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mime)) return fail('Tep Google Drive khong phai anh poster.', 502);
+    const response = new Response(res.body, { status: 200, headers: {
+      'Content-Type': mime, 'Cache-Control': 'public, max-age=86400',
+      'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline'
+    }});
+    if (cache && publicPoster) { try { await cache.put(request, response.clone()); } catch (e) { console.warn('Poster cache unavailable:', e); } }
+    return response;
   }
   if (pathname === '/api/config' && method === 'GET') {
     const s = await env.DB.prepare('SELECT key,value FROM settings WHERE key IN (?,?,?,?)').bind('ads_enabled','ad_top','ad_player','ad_social').all();
@@ -274,6 +307,32 @@ async function api(request, env) {
     const pairs = [['ads_enabled', body.ads_enabled ? 'true' : 'false'], ['ad_top', String(body.ad_top || '').slice(0, 12000)], ['ad_player', String(body.ad_player || '').slice(0, 12000)], ['ad_social', String(body.ad_social || '').slice(0, 2000)]];
     await env.DB.batch(pairs.map(([k, v]) => env.DB.prepare('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(k, v)));
     return out({ ok: true });
+  }
+  if (pathname === '/api/admin/posters' && method === 'POST') {
+    const mime = (request.headers.get('Content-Type') || '').split(';')[0].toLowerCase();
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mime)) return fail('Chi chap nhan anh JPG, PNG hoac WebP.', 415);
+    const declared = Number(request.headers.get('Content-Length') || 0);
+    if (declared > MAX_POSTER_BYTES) return fail('Poster vuot qua 5 MB.', 413);
+    const bytes = await request.arrayBuffer();
+    if (!bytes.byteLength || bytes.byteLength > MAX_POSTER_BYTES) return fail('Poster phai duoi 5 MB.', 413);
+    if (!validPosterBytes(bytes, mime)) return fail('Noi dung tep anh khong khop dinh dang.', 415);
+    const { token, folderId } = await googleToken(env);
+    if (!folderId) return fail('Google Drive chua co thu muc CineBox Phim.', 503);
+    const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/png' ? 'png' : 'webp';
+    const boundary = 'cinebox_' + uuid().replace(/-/g, '');
+    const meta = JSON.stringify({ name: `CineBox Poster ${uuid()}.${ext}`, parents: [folderId], mimeType: mime });
+    const body = new Blob([
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n`,
+      `--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`,
+      bytes, `\r\n--${boundary}--\r\n`
+    ]);
+    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` }, body
+    });
+    if (!response.ok) return fail('Google Drive khong nhan poster: ' + (await response.text()).slice(0, 250), 502);
+    const file = await response.json();
+    if (!file.id || !/^[a-zA-Z0-9_-]{10,100}$/.test(file.id)) return fail('Google Drive khong tra ve ID anh.', 502);
+    return out({ ok: true, url: `${origin}/api/posters/${file.id}` }, 201);
   }
   if (pathname === '/api/admin/uploads' && method === 'POST') {
     const b = await jsonBody(request, 8000);
