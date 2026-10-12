@@ -5,6 +5,12 @@
   <meta name="theme-color" content="#090e1a"><meta name="description" content="CineBox — Kho phim trực tuyến với giao diện hiện đại, dễ sử dụng.">
   <title>CineBox — Thế giới phim của bạn</title>
   <link rel="icon" href="/assets/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css">
+  <!-- Trang chủ hiển thị danh sách phim ngay dưới thanh menu. -->
+  <style>
+    .hero { display: none !important; }
+    .library { padding-top: 28px; }
+    @media (max-width: 510px) { .library { padding-top: 20px; } }
+  </style>
 </head>
 <body>
   <div class="site-shell">
@@ -26,7 +32,6 @@
           <div class="hero-bottom"><div class="hero-avatars"><span>★</span><span>▶</span><span>✦</span></div><div><strong>Giao diện đẹp • Phát dễ dàng</strong><small>Xem phim trên mọi thiết bị</small></div></div>
         </div><div class="hero-vertical">CINEMATIC EXPERIENCE • CINEBOX</div></div>
       </section>
-      <div class="container"><div id="ad-top" class="ad-region hidden" aria-label="Quảng cáo"></div></div>
       <section class="container library" id="library">
         <div class="library-top"><div><span class="section-label">BỘ SƯU TẬP CỦA BẠN</span><h2>Khám phá <span>phim hay</span><b>✦</b></h2><p>Chọn bộ phim bạn yêu thích và bắt đầu thưởng thức ngay.</p></div><div class="library-count" id="library-count">Đang tải phim...</div></div>
         <div class="toolbar"><div class="filter-pills" id="filters"><button class="pill current" data-type="all">Tất cả</button><button class="pill" data-type="movie">Phim lẻ</button><button class="pill" data-type="series">Phim bộ</button></div><label class="sort-pill">Sắp xếp <select id="sort"><option value="new">Mới cập nhật</option><option value="az">Tên A–Z</option><option value="year">Năm phát hành</option></select></label></div>
@@ -34,6 +39,7 @@
         <div id="empty" class="empty hidden"><div class="empty-icon">🎞</div><h3>Chưa tìm thấy phim phù hợp</h3><p>Hãy đổi từ khóa hoặc thử danh mục khác.</p><button class="btn btn-outline" id="reset-search">Xem tất cả phim</button></div>
         <p class="demo-note hidden" id="demo-note">* Phim minh họa giao diện. Hãy vào <a href="/admin.html">Trang quản trị</a> để đăng phim thật.</p>
       </section>
+      <div class="container"><div id="ad-top" class="ad-region hidden" aria-label="Quảng cáo"></div></div>
       <div class="container"><div id="ad-bottom" class="ad-region hidden" aria-label="Quảng cáo"></div></div>
       <section class="container promo"><div class="promo-icon">✺</div><div><span class="section-label">CINEBOX EXPERIENCE</span><h3>Một góc nhỏ, hàng ngàn câu chuyện.</h3><p>Thiết kế tinh gọn, dễ tìm kiếm, xem phim trên điện thoại và máy tính.</p></div><a href="#library" class="btn btn-primary">Khám phá phim <span>↗</span></a></section>
     </main>
