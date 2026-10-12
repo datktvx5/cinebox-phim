@@ -2,3 +2,13 @@
 @media(max-width:1050px){.admin-sidebar{width:215px}.admin-main{margin-left:215px;width:calc(100% - 215px)}.admin-header{padding:22px}.admin-content{padding:26px 22px}.stat-card{padding:18px}.sidebar-group{margin-top:20px}}
 @media(max-width:780px){.login-screen{grid-template-columns:1fr}.login-illustration{display:none}.login-panel{min-height:100vh;padding:60px 30px}.login-top{top:32px}.admin-sidebar{width:100%;height:62px;bottom:auto;right:0;padding:9px 15px;display:flex;flex-direction:row;align-items:center;gap:13px}.admin-brand{font-size:17px;margin-left:0}.admin-brand .brand-icon{width:25px;height:25px}.sidebar-sub,.admin-sidebar .nav-label,.sidebar-footer{display:none}.sidebar-nav{margin-left:auto;display:flex;flex-direction:row;overflow:auto;gap:1px}.tab-link{font-size:0;padding:8px 10px;flex-shrink:0}.tab-link span{font-size:22px;width:auto}.admin-main{margin:62px 0 0;width:100%}.admin-header{height:85px}.admin-content{padding:20px 15px}.stats{gap:9px}.stat-card{padding:14px}.stat-card strong{font-size:28px}.stat-card .stat-status{font-size:14px}.stat-card>span{font-size:9px}.quick-grid{grid-template-columns:1fr}}
 @media(max-width:530px){.welcome-box{padding:24px}.welcome-box h2{font-size:23px}.welcome-art{display:none}.stats{grid-template-columns:1fr;gap:9px}.stat-card{min-height:90px}.stat-card strong{font-size:26px;margin:5px 0}.stat-card .stat-status{margin-top:9px}.form-grid,.ad-code-grid{grid-template-columns:1fr}.col-wide{grid-column:1}.page-actions{align-items:flex-start}.page-actions .btn{font-size:11px;padding:10px}.admin-card{padding:15px}.form-bottom{justify-content:stretch}.form-bottom .btn{flex:1}.drive-summary{gap:9px}.drive-icon{height:47px;width:47px}.header-visit{font-size:10px;padding:8px}.header-avatar{display:none}.admin-header h1{font-size:18px}.episode-row{align-items:flex-start;flex-direction:column}}
+
+/* Single portrait poster selector */
+.poster-upload-field{display:flex;flex-direction:column;gap:10px;min-width:0}
+.poster-field-title{font-size:10px;font-weight:900;letter-spacing:1px;color:#b9c7d7}
+.poster-picker{width:min(100%,290px);min-height:220px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;border:2px dashed #566b83;border-radius:14px;background:#192539;cursor:pointer;padding:16px;text-align:center}
+.poster-picker:hover{border-color:#f57554}
+.poster-preview{width:170px;height:255px;border-radius:10px;object-fit:cover;box-shadow:0 8px 25px #0007}
+.poster-empty{color:#f6b299;font-size:14px;font-weight:800}
+.poster-picker small,.poster-help{color:#9baec4;font-size:12px;line-height:1.6}
+#poster-file{font-size:12px;color:#9baec4;max-width:100%}
