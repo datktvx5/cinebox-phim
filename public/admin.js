@@ -26,11 +26,43 @@ async function refreshMovies(){
 function renderMovieTable(){const tbody=$('#movie-table');if(!movies.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:36px;color:#92a4b8">Chưa có phim. Nhấn “Đăng phim mới” để bắt đầu.</td></tr>';return;}
   tbody.innerHTML=movies.map(m=>`<tr><td><div class="film-cell">${img(m.poster_url)?`<img src="${esc(img(m.poster_url))}" alt="">`:'<span class="film-placeholder"></span>'}<div><b>${esc(m.title)}</b><small>${m.type==='series'?'Phim bộ':'Phim lẻ'}</small></div></div></td><td>${esc(m.genre)}</td><td>${esc(m.year)}</td><td><span class="status-tag ${m.published?'':'off'}">${m.published?'Đang hiển thị':'Đã ẩn'}</span></td><td>${esc(m.episode_count)}</td><td><div class="table-actions"><button class="mini-btn" data-action="episodes" data-id="${esc(m.id)}" title="Quản lý tập">⇧ Tập</button><button class="mini-btn" data-action="edit" data-id="${esc(m.id)}">Sửa</button><button class="mini-btn danger" data-action="delete" data-id="${esc(m.id)}">Xóa</button></div></td></tr>`).join('');
 }
-function showMovieForm(movie=null){switchTab('movies');currentEdit=movie?.id||null;$('#form-heading').textContent=movie?'Chỉnh sửa phim':'Đăng phim mới';const form=$('#movie-form');form.reset();if(movie){for(const key of ['title','genre','year','type','synopsis','poster_url','backdrop_url'])form.elements.namedItem(key).value=movie[key]||'';form.elements.namedItem('featured').checked=!!movie.featured;form.elements.namedItem('published').checked=!!movie.published;}else{form.elements.namedItem('year').value=new Date().getFullYear();form.elements.namedItem('published').checked=true;}$('#movie-form-card').classList.remove('hidden');$('#movie-form-card').scrollIntoView({behavior:'smooth',block:'start'});}
-function hideMovieForm(){currentEdit=null;$('#movie-form-card').classList.add('hidden');}
-async function saveMovie(event){event.preventDefault();if(busy)return;const f=event.target;const values=Object.fromEntries(new FormData(f).entries());values.featured=f.elements.namedItem('featured').checked;values.published=f.elements.namedItem('published').checked;values.year=Number(values.year);busy=true;$('#save-movie').disabled=true;
-  try{const path=currentEdit?`/api/admin/movies/${currentEdit}`:'/api/admin/movies';const res=await api(path,{method:currentEdit?'PUT':'POST',body:values});if(!currentEdit)selectedId=res.id;toast(currentEdit?'Đã cập nhật phim.':'Đăng phim thành công! Bây giờ có thể tải tập phim lên.');hideMovieForm();await refreshMovies();}
-  catch(e){toast(e.message,true);}finally{busy=false;$('#save-movie').disabled=false;}
+let posterLocalPreview=null;
+function posterPreview(url, filename=''){
+  const p=$('#poster-preview'),empty=$('#poster-empty');
+  p.classList.toggle('hidden',!url);empty.classList.toggle('hidden',!!url);
+  if(url)p.src=url;else p.removeAttribute('src');
+  $('#poster-filename').textContent=filename||'JPG, PNG hoặc WebP • Tối đa 5 MB • Tỉ lệ 2:3';
+}
+function releasePosterPreview(){if(posterLocalPreview){URL.revokeObjectURL(posterLocalPreview);posterLocalPreview=null;}}
+function choosePoster(){
+  releasePosterPreview();const file=$('#poster-file').files?.[0];
+  if(file){
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024||!file.size){
+      $('#poster-file').value='';toast('Chỉ chọn JPG, PNG, WebP không quá 5 MB.',true);
+    } else {posterLocalPreview=URL.createObjectURL(file);posterPreview(posterLocalPreview,file.name);return;}
+  }
+  posterPreview($('#movie-form').elements.namedItem('poster_url').value);
+}
+function showMovieForm(movie=null){switchTab('movies');currentEdit=movie?.id||null;$('#form-heading').textContent=movie?'Chỉnh sửa phim':'Đăng phim mới';const form=$('#movie-form');form.reset();releasePosterPreview();if(movie){for(const key of ['title','genre','year','type','synopsis','poster_url','backdrop_url'])form.elements.namedItem(key).value=movie[key]||'';form.elements.namedItem('featured').checked=!!movie.featured;form.elements.namedItem('published').checked=!!movie.published;}else{form.elements.namedItem('year').value=new Date().getFullYear();form.elements.namedItem('published').checked=true;}posterPreview(movie?.poster_url||'');$('#movie-form-card').classList.remove('hidden');$('#movie-form-card').scrollIntoView({behavior:'smooth',block:'start'});}
+function hideMovieForm(){currentEdit=null;releasePosterPreview();$('#movie-form-card').classList.add('hidden');}
+async function saveMovie(event){event.preventDefault();if(busy)return;const f=event.target;const values=Object.fromEntries(new FormData(f).entries());values.featured=f.elements.namedItem('featured').checked;values.published=f.elements.namedItem('published').checked;values.year=Number(values.year);
+  const poster=$('#poster-file').files?.[0];
+  if(!currentEdit&&!poster&&!values.poster_url)return toast('Vui lòng chọn 1 ảnh poster trước khi lưu phim.',true);
+  busy=true;$('#save-movie').disabled=true;
+  try{
+    if(poster){
+      if(!['image/jpeg','image/png','image/webp'].includes(poster.type)||!poster.size||poster.size>5*1024*1024)throw new Error('Ảnh phải là JPG, PNG hoặc WebP dưới 5 MB.');
+      $('#save-movie').textContent='Đang tải ảnh...';
+      const uploaded=await api('/api/admin/posters',{method:'POST',headers:{'Content-Type':poster.type},body:poster});
+      values.poster_url=uploaded.url;
+    }
+    $('#save-movie').textContent='Đang lưu phim...';
+    const path=currentEdit?`/api/admin/movies/${currentEdit}`:'/api/admin/movies';
+    const res=await api(path,{method:currentEdit?'PUT':'POST',body:values});
+    if(!currentEdit)selectedId=res.id;
+    toast(currentEdit?'Đã cập nhật phim.':'Đăng phim thành công! Bây giờ có thể thêm tập phim.');
+    hideMovieForm();await refreshMovies();
+  }catch(e){toast(e.message,true);}finally{busy=false;$('#save-movie').disabled=false;$('#save-movie').textContent='Lưu phim →';}
 }
 async function movieTableAction(event){const b=event.target.closest('[data-action]');if(!b)return;const m=movies.find(x=>x.id===b.dataset.id);if(!m)return;
   if(b.dataset.action==='edit')showMovieForm(m);
@@ -76,7 +108,7 @@ async function login(e){e.preventDefault();const p=$('#password').value;$('#logi
 async function boot(){loginState(true);switchTab('dashboard');await refreshMovies();$('#redirect-uri').textContent=location.origin+'/api/admin/google/callback';if(location.search.includes('google=connected')){toast('Google Drive đã kết nối!');history.replaceState(null,'',location.pathname);}else if(location.search.includes('google=cancelled')){toast('Đã hủy kết nối Google.',true);history.replaceState(null,'',location.pathname);}}
 function bind(){
   $('#login-form').addEventListener('submit',login);$('#logout').addEventListener('click',logout);$$('[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$$('[data-switch]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.switch)));
-  $('#new-movie').addEventListener('click',()=>showMovieForm());$('#cancel-movie').addEventListener('click',hideMovieForm);$('#cancel-movie-2').addEventListener('click',hideMovieForm);$('#movie-form').addEventListener('submit',saveMovie);$('#movie-table').addEventListener('click',movieTableAction);
+  $('#poster-file').addEventListener('change',choosePoster);$('#new-movie').addEventListener('click',()=>showMovieForm());$('#cancel-movie').addEventListener('click',hideMovieForm);$('#cancel-movie-2').addEventListener('click',hideMovieForm);$('#movie-form').addEventListener('submit',saveMovie);$('#movie-table').addEventListener('click',movieTableAction);
   $('#upload-movie').addEventListener('change',refreshEpisodes);$('#upload-file').addEventListener('change',()=>{$('#chosen-name').textContent=$('#upload-file').files?.[0]?.name||'Chọn file video cần tải lên';});$('#upload-form').addEventListener('submit',doUpload);$('#episode-list').addEventListener('click',episodeAction);$('#link-episode-form').addEventListener('submit',linkEpisode);
   $('#ads-form').addEventListener('submit',saveAds);$('#connect-drive').addEventListener('click',connectDrive);$('#disconnect-drive').addEventListener('click',disconnectDrive);
 }
