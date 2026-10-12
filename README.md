@@ -110,7 +110,7 @@ npm run db:local
 npm run db:remote
 npm run deploy
 ```
-
+Cap nhat CineBox - sua loi trang Admin
 Kiểm thử tích hợp hiện có chạy **API với D1 mô phỏng SQLite**, không chạy upload Google thật. Tạo file `.dev.vars` (đã được `.gitignore`) để test OAuth/local; không commit secrets.
 
 **Tài liệu đối chiếu:** https://developers.cloudflare.com/workers/static-assets/ , https://developers.cloudflare.com/d1/ , https://developers.google.com/workspace/drive/api/guides/manage-uploads , https://adsterra.com/blog/how-banner-ads-make-money/ .
