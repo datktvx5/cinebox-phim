@@ -1,0 +1,15 @@
+{
+  "name": "cinebox-phim",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Website phim Cloudflare Worker + D1 + Google Drive + Adsterra",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 execute cinebox-db --local --file=./sql/schema.sql",
+    "db:remote": "wrangler d1 execute cinebox-db --remote --file=./sql/schema.sql",
+    "check": "node --check src/worker.js && node --check public/app.js && node --check public/admin.js && node --test tests/*.test.js"
+  },
+  "devDependencies": { "wrangler": "^4.0.0" }
+}
