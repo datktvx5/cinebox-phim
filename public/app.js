@@ -47,11 +47,94 @@ async function initAds() {
     if(src) { const u=new URL(src,location.href); if(u.protocol==='https:'){const s=document.createElement('script');s.src=u.href;s.async=true;s.referrerPolicy='strict-origin-when-cross-origin';document.body.appendChild(s);} }
   } catch(e) {console.info('Quảng cáo chưa cấu hình:',e.message);}
 }
+// Mobile viewer controls live outside the Google Drive iframe: its controls cannot be restyled by CineBox.
+function setupMobileViewerStyles() {
+  if (document.getElementById('cinebox-mobile-viewer-style')) return;
+  const sheet = document.createElement('style');
+  sheet.id = 'cinebox-mobile-viewer-style';
+  sheet.textContent = `
+    #movie-dialog .cinebox-mobile-tools { display: none; }
+    #movie-dialog #player .cinebox-fullscreen-exit { display: none; }
+    @media screen and (max-width: 640px) {
+      #movie-dialog .cinebox-mobile-tools {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 8px; padding: 8px 12px; background: #111928;
+        color: #c9d2e0; font-size: 11px; line-height: 1.35;
+      }
+      #movie-dialog .cinebox-mobile-tools > span { flex: 1; min-width: 0; }
+      #movie-dialog .cinebox-mobile-tools > button {
+        flex: none; border: 0; border-radius: 8px; background: #f57554;
+        color: #121826; font-size: 12px; font-weight: 800;
+        padding: 11px 12px; min-height: 40px; touch-action: manipulation;
+      }
+    }
+    /* This is intentionally outside the width media query: landscape devices exceed 640px. */
+    #movie-dialog #player.player-wrap:fullscreen,
+    #movie-dialog #player.player-wrap:-webkit-full-screen {
+      position: fixed !important; inset: 0 !important; display: block !important;
+      width: 100vw !important; height: 100vh !important; height: 100dvh !important;
+      min-height: 0 !important; max-height: none !important;
+      aspect-ratio: auto !important; overflow: hidden !important;
+      margin: 0 !important; padding: 0 !important; border: 0 !important;
+      border-radius: 0 !important; background: black !important;
+    }
+    #movie-dialog #player.player-wrap:fullscreen iframe,
+    #movie-dialog #player.player-wrap:-webkit-full-screen iframe {
+      position: absolute !important; inset: 0 !important;
+      width: 100% !important; height: 100% !important;
+      max-width: none !important; max-height: none !important;
+      transform: none !important; border: 0 !important;
+    }
+    #movie-dialog #player.player-wrap:fullscreen .cinebox-fullscreen-exit,
+    #movie-dialog #player.player-wrap:-webkit-full-screen .cinebox-fullscreen-exit {
+      display: block !important; position: absolute !important; z-index: 8;
+      top: calc(8px + env(safe-area-inset-top, 0px));
+      right: calc(8px + env(safe-area-inset-right, 0px));
+      border: 1px solid #ffffff70; border-radius: 8px;
+      padding: 8px 12px; color: #fff; background: #121a2bde;
+      font-size: 13px; font-weight: 700; min-height: 38px;
+    }
+  `;
+  document.head.appendChild(sheet);
+}
+async function openMobileViewerFullscreen() {
+  const player = $('#player');
+  if (!player || !player.querySelector('iframe')) {
+    notice('Hãy chọn một tập phim trước.');
+    return;
+  }
+  if (!player.requestFullscreen) {
+    notice('Trình duyệt chưa hỗ trợ nút này. Hãy xoay điện thoại ngang.');
+    return;
+  }
+  try {
+    await player.requestFullscreen();
+  } catch (err) {
+    notice('Không mở được toàn màn hình. Hãy thử xoay điện thoại ngang.');
+    return;
+  }
+  // Android Chrome often permits orientation lock only after entering fullscreen.
+  if (screen.orientation && typeof screen.orientation.lock === 'function') {
+    try { await screen.orientation.lock('landscape'); }
+    catch (_) { notice('Bạn hãy xoay ngang điện thoại để xem rõ thanh điều khiển.'); }
+  } else {
+    notice('Bạn hãy xoay ngang điện thoại để xem rõ thanh điều khiển.');
+  }
+}
+async function exitMobileViewerFullscreen() {
+  if (document.fullscreenElement && document.exitFullscreen) {
+    try { await document.exitFullscreen(); } catch (_) { /* browser may have exited already */ }
+  }
+  if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+    try { screen.orientation.unlock(); } catch (_) { /* optional */ }
+  }
+}
+
 function goToMovie(id){ if(id.startsWith('demo-')) { openDemo(id); return; } location.hash='watch/'+encodeURIComponent(id); }
 function openDemo(id){const m=demos.find(m=>m.id===id); if(!m)return;showDialog(m,[],true);}
 function showDialog(movie,eps,demonstration=false){
   const safeCover=safeImg(movie.poster_url);
-  const html=`<div class="detail-hero"><div class="detail-top">${safeCover?`<img class="detail-poster" src="${escapeHTML(safeCover)}" alt="">`:'<div class="detail-poster"></div>'}<div><span class="detail-label">${movie.type==='series'?'SERIES / PHIM BỘ':'MOVIE / PHIM LẺ'}</span><h2>${escapeHTML(movie.title)}</h2><div class="detail-info">${escapeHTML(movie.year)} &nbsp; • &nbsp; ${escapeHTML(movie.genre)} &nbsp; • &nbsp; ${eps.length} tập</div><p class="detail-description">${escapeHTML(movie.synopsis || 'Chưa có giới thiệu cho phim này.')}</p></div></div></div><div class="player-wrap" id="player"><div class="player-placeholder"><strong>${demonstration?'Đây là phim minh họa':eps.length?'Chọn một tập để phát phim':'Phim chưa có video'}</strong><p>${demonstration?'Hãy đăng phim thật trong trang quản trị.':eps.length?'Nhấn vào tập bên dưới để phát video từ Google Drive.':'Nội dung sẽ được cập nhật sau.'}</p></div></div><div class="player-foot">Video được phát thông qua trình xem của Google Drive; thời gian xử lý và hạn mức do Google quyết định.</div><section class="detail-section"><h3>Danh sách tập <span style="font-size:12px;color:#90a0b4;font-weight:normal">(${eps.length})</span></h3><div class="episode-grid">${eps.length?eps.map((e,i)=>`<button class="episode-btn" data-file="${escapeHTML(e.drive_file_id)}" data-index="${i}" data-share="${e.public_ok}">${escapeHTML(e.title)}</button>`).join(''):'<p style="font-size:12px;color:#90a0b4">Chưa có tập phim.</p>'}</div></section>`;
+  const html=`<div class="detail-hero"><div class="detail-top">${safeCover?`<img class="detail-poster" src="${escapeHTML(safeCover)}" alt="">`:'<div class="detail-poster"></div>'}<div><span class="detail-label">${movie.type==='series'?'SERIES / PHIM BỘ':'MOVIE / PHIM LẺ'}</span><h2>${escapeHTML(movie.title)}</h2><div class="detail-info">${escapeHTML(movie.year)} &nbsp; • &nbsp; ${escapeHTML(movie.genre)} &nbsp; • &nbsp; ${eps.length} tập</div><p class="detail-description">${escapeHTML(movie.synopsis || 'Chưa có giới thiệu cho phim này.')}</p></div></div></div><div class="cinebox-mobile-tools"><span>Thanh điều khiển Google Drive rõ hơn khi xoay ngang.</span><button type="button" data-cinebox-fullscreen>⛶ Xem rộng</button></div><div class="player-wrap" id="player"><div class="player-placeholder"><strong>${demonstration?'Đây là phim minh họa':eps.length?'Chọn một tập để phát phim':'Phim chưa có video'}</strong><p>${demonstration?'Hãy đăng phim thật trong trang quản trị.':eps.length?'Nhấn vào tập bên dưới để phát video từ Google Drive.':'Nội dung sẽ được cập nhật sau.'}</p></div></div><div class="player-foot">Video được phát thông qua trình xem của Google Drive; thời gian xử lý và hạn mức do Google quyết định.</div><section class="detail-section"><h3>Danh sách tập <span style="font-size:12px;color:#90a0b4;font-weight:normal">(${eps.length})</span></h3><div class="episode-grid">${eps.length?eps.map((e,i)=>`<button class="episode-btn" data-file="${escapeHTML(e.drive_file_id)}" data-index="${i}" data-share="${e.public_ok}">${escapeHTML(e.title)}</button>`).join(''):'<p style="font-size:12px;color:#90a0b4">Chưa có tập phim.</p>'}</div></section>`;
   $('#movie-content').innerHTML=html;$('#movie-dialog').showModal();document.body.style.overflow='hidden';
   const first=$('.episode-btn');if(first) selectEpisode(first);
 }
@@ -60,7 +143,13 @@ function selectEpisode(button){
   if(!/^[a-zA-Z0-9_-]{10,100}$/.test(fileId))return notice('Google Drive file ID không hợp lệ.');
   $$('.episode-btn').forEach(b=>b.classList.toggle('selected',b===button));
   const iframe=document.createElement('iframe');iframe.title=`Phát ${button.textContent}`;iframe.src=`https://drive.google.com/file/d/${encodeURIComponent(fileId)}/preview`;iframe.allow='autoplay; fullscreen; picture-in-picture';iframe.allowFullscreen=true;iframe.referrerPolicy='strict-origin-when-cross-origin';
-  $('#player').replaceChildren(iframe);
+  const exit = document.createElement('button');
+  exit.type = 'button';
+  exit.className = 'cinebox-fullscreen-exit';
+  exit.textContent = '✕ Thoát';
+  exit.setAttribute('aria-label', 'Thoát toàn màn hình');
+  exit.dataset.cineboxExit = '';
+  $('#player').replaceChildren(iframe, exit);
   if(button.dataset.share==='0')notice('Tập phim có thể cần cấp quyền chia sẻ công khai trong Drive.');
 }
 async function openFromHash(){const hash=decodeURIComponent(location.hash.slice(1));const found=hash.match(/^watch\/([a-f0-9-]+)$/);if(!found)return;
@@ -68,6 +157,7 @@ async function openFromHash(){const hash=decodeURIComponent(location.hash.slice(
 }
 function closeDialog(){if($('#movie-dialog').open)$('#movie-dialog').close();document.body.style.overflow='';if(location.hash.startsWith('#watch/'))history.replaceState(null,'',location.pathname+'#library');}
 async function init(){
+  setupMobileViewerStyles();
   $('#year').textContent=new Date().getFullYear();
   $('#search').addEventListener('input',render);
   $('#sort').addEventListener('change',e=>{sort=e.target.value;render();});
@@ -75,7 +165,11 @@ async function init(){
   $$('.main-nav a').forEach(a=>a.addEventListener('click',()=>{activeType=a.dataset.nav;render();document.querySelector('#library').scrollIntoView({behavior:'smooth'});}));
   $('#movie-grid').addEventListener('click',e=>{const c=e.target.closest('[data-id]');if(c)goToMovie(c.dataset.id);});
   $('#movie-grid').addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){const c=e.target.closest('[data-id]');if(c){e.preventDefault();goToMovie(c.dataset.id);}}});
-  $('#movie-content').addEventListener('click',e=>{const b=e.target.closest('.episode-btn');if(b)selectEpisode(b);});
+  $('#movie-content').addEventListener('click',e=>{
+    if (e.target.closest('[data-cinebox-fullscreen]')) { openMobileViewerFullscreen(); return; }
+    if (e.target.closest('[data-cinebox-exit]')) { exitMobileViewerFullscreen(); return; }
+    const b=e.target.closest('.episode-btn');if(b)selectEpisode(b);
+  });
   $('#dialog-close').addEventListener('click',closeDialog);
   $('#movie-dialog').addEventListener('close',()=>{document.body.style.overflow='';const p=$('#player');if(p)p.replaceChildren();});
   $('#movie-dialog').addEventListener('click',e=>{if(e.target===$('#movie-dialog'))closeDialog();});
